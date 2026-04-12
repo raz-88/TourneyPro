@@ -9,26 +9,83 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Design tokens (dark theme) ────────────────────────────── */
-:root {
-  /* Backgrounds */
-  --bg:         #0a0b0f;
-  --surface-1:  #111318;
-  --surface-2:  #1a1d24;
-  --surface-3:  #22262f;
+/* ── Design tokens (dark theme by default) ────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  /* Backgrounds - Sporty dark gradient palette */
+  --bg:         #0a0e27;
+  --surface-1:  #12172e;
+  --surface-2:  #1a2447;
+  --surface-3:  #233355;
 
-  /* Borders */
-  --border:     #2a2d38;
+  /* Borders - Electric accent borders */
+  --border:     #2a4a7c;
 
-  /* Text */
-  --text-1:     #f0f2f8;
-  --text-2:     #a0a6bc;
-  --text-3:     #5a607a;
+  /* Text - Clean crisp whites */
+  --text-1:     #f0f6ff;
+  --text-2:     #9eb3d1;
+  --text-3:     #6b7fa8;
 
-  /* Accent — electric indigo */
+  /* Accent - Vibrant electric cyan/lime combo */
   --accent:       #6c63ff;
   --accent-hover: #5b54e8;
 }
+
+/* ── Design tokens (light theme) ───────────────────────────── */
+[data-theme="light"] {
+  /* Backgrounds - Sporty light gradient palette */
+  --bg:         #f5f7ff;
+  --surface-1:  #ffffff;
+  --surface-2:  #f0f3fb;
+  --surface-3:  #e5ecf8;
+
+  /* Borders - Electric accent borders */
+  --border:     #d1dff0;
+
+  /* Text - Bold dark grays */
+  --text-1:     #0a1929;
+  --text-2:     #334966;
+  --text-3:     #7a8fa3;
+
+  /* Accent - Vibrant electric cyan */
+  --accent:       #00c7e0;
+  --accent-hover: #00a8d4;
+}
+
+/* ── Gradient backgrounds for sporty look ───────────────────── */
+:root,
+[data-theme="dark"] {
+  --gradient-bg: linear-gradient(135deg, 
+    rgba(10, 14, 39, 0.95) 0%,
+    rgba(18, 23, 46, 0.9) 50%,
+    rgba(26, 36, 71, 0.95) 100%);
+  
+  --gradient-overlay: radial-gradient(
+    circle at 20% 50%,
+    rgba(0, 229, 255, 0.08) 0%,
+    transparent 50%),
+    radial-gradient(
+    circle at 80% 20%,
+    rgba(0, 229, 255, 0.06) 0%,
+    transparent 50%);
+}
+
+[data-theme="light"] {
+  --gradient-bg: linear-gradient(135deg, 
+    rgba(245, 247, 255, 0.98) 0%,
+    rgba(240, 243, 251, 0.95) 50%,
+    rgba(229, 236, 248, 0.98) 100%);
+  
+  --gradient-overlay: radial-gradient(
+    circle at 20% 50%,
+    rgba(0, 199, 224, 0.08) 0%,
+    transparent 50%),
+    radial-gradient(
+    circle at 80% 20%,
+    rgba(0, 199, 224, 0.06) 0%,
+    transparent 50%);
+}
+
 
 /* ── Base resets ────────────────────────────────────────────── */
 *, *::before, *::after {
@@ -45,10 +102,21 @@ html {
 
 body {
   font-family: 'DM Sans', system-ui, sans-serif;
-  background: var(--bg);
+  background: var(--gradient-bg);
   color: var(--text-1);
   line-height: 1.6;
   min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--gradient-overlay);
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* ── Typography utilities ───────────────────────────────────── */
@@ -80,6 +148,8 @@ input[type="number"]::-webkit-outer-spin-button {
 /* ── Smooth page transitions ─────────────────────────────────── */
 main {
   animation: fadeIn 0.18s ease-out;
+  position: relative;
+  z-index: 1;
 }
 
 @keyframes fadeIn {
@@ -87,7 +157,35 @@ main {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Ensure layout content appears above gradients ────────────── */
+#root {
+  position: relative;
+  z-index: 1;
+}
+
 /* ── Checkbox accent ─────────────────────────────────────────── */
 input[type="checkbox"] {
   accent-color: var(--accent);
+}
+
+/* ── Sporty button effects ─────────────────────────────────────── */
+button {
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* ── Sporty surface gradients ──────────────────────────────────── */
+[style*="background: var(--surface-1)"],
+[style*="background: var(--surface-2)"],
+[style*="background: var(--surface-3)"] {
+  backdrop-filter: blur(10px);
+  background-blend-mode: overlay;
+}
+
+/* ── Smooth transitions ────────────────────────────────────────── */
+* {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }

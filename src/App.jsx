@@ -7,6 +7,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { TournamentProvider } from './contexts/TournamentContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 import ProtectedRoute    from './components/auth/ProtectedRoute';
 import AuthPage          from './components/auth/AuthPage';
@@ -18,6 +19,7 @@ import TournamentDetailPage from './components/tournament/TournamentDetailPage';
 import MatchesPage       from './components/matches/MatchesPage';
 import FixturesPage      from './components/fixtures/FixturesPage';
 import LeaderboardPage   from './components/leaderboard/LeaderboardPage';
+import PoolManagementPage from './components/pools/PoolManagementPage';
 import SubUsersPage      from './components/subusers/SubUsersPage';
 import SettingsPage      from './components/settings/SettingsPage';
 
@@ -70,6 +72,12 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
+      <Route path="/pool-management" element={
+        <ProtectedRoute>
+          <Layout><PoolManagementPage /></Layout>
+        </ProtectedRoute>
+      } />
+
       <Route path="/sub-users" element={
         <ProtectedRoute adminOnly>
           <Layout><SubUsersPage /></Layout>
@@ -91,11 +99,13 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <TournamentProvider>
-          <AppRoutes />
-        </TournamentProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <TournamentProvider>
+            <AppRoutes />
+          </TournamentProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }
