@@ -1,0 +1,105 @@
+// firestore.rules
+// ─────────────────────────────────────────────────────────────
+// Firestore Security Rules for TourneyPro.
+//
+// Data isolation model:
+//   • Every document stores a `mainUserId` field.
+//   • Main users read/write their own mainUserId documents.
+//   • Sub-users share the same mainUserId as their parent.
+//   • View-only sub-users can only read.
+//   • Edit sub-users can read + write (not delete tournaments).
+// ─────────────────────────────────────────────────────────────
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────
+
+    // Is the caller authenticated?
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Get the caller's Firestore user profile.
+    function callerProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // The "data owner" uid: main users use their own uid;
+    // sub-users use their mainUserId.
+    function ownerUid() {
+      return callerProfile().mainUserId;
+    }
+
+    // Is the caller a main-user admin?
+    function isAdmin() {
+      return isAuth() && callerProfile().role == 'main';
+    }
+
+    // Can the caller edit (admin or edit-permission sub-user)?
+    function canEdit() {
+      return isAuth() && (
+        callerProfile().permissions == 'admin' ||
+        callerProfile().permissions == 'edit'
+      );
+    }
+
+    // Does the document belong to the caller's data space?
+    function owns(resource) {
+      return resource.data.mainUserId == ownerUid();
+    }
+
+    // ── /users/{uid} ─────────────────────────────────────────
+    match /users/{uid} {
+      // Anyone can read their own profile; main users can read sub-users.
+      allow read: if isAuth() && (
+        request.auth.uid == uid ||
+        callerProfile().role == 'main'
+      );
+
+      // Only the user themselves or an admin can write their profile.
+      allow create: if isAuth();
+      allow update: if isAuth() && (
+        request.auth.uid == uid || isAdmin()
+      );
+      // Only admins can delete sub-user profiles.
+      allow delete: if isAdmin();
+    }
+
+    // ── /tournaments/{tid} ───────────────────────────────────
+    match /tournaments/{tid} {
+      allow read:   if isAuth() && owns(resource);
+      allow create: if isAuth() && canEdit() &&
+                       request.resource.data.mainUserId == ownerUid();
+      allow update: if isAuth() && canEdit() && owns(resource);
+      // Only main admins can delete tournaments.
+      allow delete: if isAdmin() && owns(resource);
+    }
+
+    // ── /teams/{teamId} ──────────────────────────────────────
+    match /teams/{teamId} {
+      allow read:   if isAuth() && owns(resource);
+      allow create: if isAuth() && canEdit() &&
+                       request.resource.data.mainUserId == ownerUid();
+      allow update: if isAuth() && canEdit() && owns(resource);
+      allow delete: if isAuth() && canEdit() && owns(resource);
+    }
+
+    // ── /matches/{matchId} ───────────────────────────────────
+    match /matches/{matchId} {
+      allow read:   if isAuth() && owns(resource);
+      allow create: if isAuth() && canEdit() &&
+                       request.resource.data.mainUserId == ownerUid();
+      allow update: if isAuth() && canEdit() && owns(resource);
+      allow delete: if isAdmin() && owns(resource);
+    }
+
+    // ── /leaderboard/{entryId} ───────────────────────────────
+    match /leaderboard/{entryId} {
+      allow read:   if isAuth() && owns(resource);
+      allow write:  if isAuth() && canEdit() &&
+                       request.resource.data.mainUserId == ownerUid();
+    }
+  }
+}
