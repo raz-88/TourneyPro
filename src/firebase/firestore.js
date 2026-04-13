@@ -117,6 +117,10 @@ export async function updateMatch(id, data) {
   });
 }
 
+export async function deleteMatch(id) {
+  await deleteDoc(doc(db, 'matches', id));
+}
+
 // ════════════════════════════════════════════════════════════
 //  LEADERBOARD
 // ════════════════════════════════════════════════════════════

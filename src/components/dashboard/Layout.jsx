@@ -7,17 +7,19 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Trophy, Swords, Calendar, BarChart3,
-  Users, Settings, LogOut, ChevronLeft, ChevronRight, Menu, Bell
+  Users, Settings, LogOut, ChevronLeft, ChevronRight, Menu, Bell, Sun, Moon, Layers
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { logoutUser } from '../../firebase/auth';
 
 const NAV = [
   { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/tournaments',  icon: Trophy,           label: 'My Tournaments' },
-  { to: '/matches',      icon: Swords,           label: 'Matches' },
   { to: '/fixtures',     icon: Calendar,         label: 'Fixtures' },
+  { to: '/matches',      icon: Swords,           label: 'Matches' },
   { to: '/leaderboard',  icon: BarChart3,        label: 'Leaderboard' },
+  { to: '/pool-management', icon: Layers,        label: 'Pool Management' },
   { to: '/sub-users',    icon: Users,            label: 'Sub-Users', adminOnly: true },
   { to: '/settings',     icon: Settings,         label: 'Settings' },
 ];
@@ -26,6 +28,7 @@ export default function Layout({ children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { profile, user, isAdmin } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -36,7 +39,10 @@ export default function Layout({ children }) {
   const navItems = NAV.filter(n => !n.adminOnly || isAdmin);
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
+    <div className="flex h-screen overflow-hidden" style={{ 
+      background: 'var(--gradient-bg)',
+      backgroundAttachment: 'fixed'
+    }}>
       {/* ── Mobile overlay ── */}
       {mobileOpen && (
         <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />
@@ -54,14 +60,17 @@ export default function Layout({ children }) {
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-[var(--border)]">
-          <div className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center"
-            style={{ background: 'var(--accent)' }}>
-            <Trophy size={16} className="text-white" />
-          </div>
+          <img src="/logo.png" alt="TourneyPro" className="w-9 h-9 flex-shrink-0 drop-shadow-lg group-hover:scale-110 transition-transform duration-300" />
+          
           {!collapsed && (
-            <span className="font-display font-bold text-[var(--text-1)] text-lg leading-none">
-              TourneyPro
-            </span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-display font-black text-[var(--text-1)] text-lg">
+                TOURNEY
+              </span>
+              <span className="font-display font-bold text-xs text-orange-500 tracking-wider">
+                PRO
+              </span>
+            </div>
           )}
         </div>
 
@@ -132,6 +141,13 @@ export default function Layout({ children }) {
             <Menu size={20} />
           </button>
           <div className="flex-1" />
+          <button
+            onClick={toggleTheme}
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-2)] transition-all"
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
           <button className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-2)] transition-all relative">
             <Bell size={18} />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[var(--accent)]" />

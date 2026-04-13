@@ -5,10 +5,11 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Swords, Filter, Clock, CheckCircle, Play, Save, X } from 'lucide-react';
+import { Swords, Filter, Clock, CheckCircle, Play, Save, X, FileDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { getTournaments, getMatches, updateMatch, upsertLeaderboardEntry } from '../../firebase/firestore';
+import { getTournaments, getMatches, getTeams, updateMatch, upsertLeaderboardEntry } from '../../firebase/firestore';
 import { calculateStandings } from '../../utils/fixtureGenerator';
+import { exportMatchesToExcel, exportMatchesToPDF } from '../../utils/exportUtils';
 import { Card, Badge, Button, Select, Spinner, EmptyState } from '../ui';
 
 export default function MatchesPage() {
@@ -18,7 +19,7 @@ export default function MatchesPage() {
 
   const [tournaments, setTournaments]   = useState([]);
   const [matches,     setMatches]       = useState([]);
-  const [teams,       setTeams]         = useState({});
+  const [teamMap,     setTeamMap]       = useState({});
   const [loading,     setLoading]       = useState(true);
 
   // Filters
@@ -40,16 +41,29 @@ export default function MatchesPage() {
       // Load matches for all tournaments
       const allMatches = await Promise.all(ts.map(t => getMatches(t.id)));
       setMatches(allMatches.flat());
+
+      // Load teams for all tournaments for name lookups
+      const allTeams = await Promise.all(ts.map(t => getTeams(t.id)));
+      const teamMapObj = {};
+      allTeams.forEach(teams => {
+        teams.forEach(team => {
+          teamMapObj[team.id] = team;
+        });
+      });
+      setTeamMap(teamMapObj);
+
       setLoading(false);
     }
     load();
   }, [dataUserId]);
 
-  const filtered = matches.filter(m => {
-    if (filterTournament !== 'all' && m.tournamentId !== filterTournament) return false;
-    if (filterStatus !== 'all' && m.status !== filterStatus) return false;
-    return true;
-  });
+  const filtered = matches
+    .filter(m => {
+      if (filterTournament !== 'all' && m.tournamentId !== filterTournament) return false;
+      if (filterStatus !== 'all' && m.status !== filterStatus) return false;
+      return true;
+    })
+    .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0));
 
   // ── Save match result ─────────────────────────────────────
   async function handleSaveScore() {
@@ -101,11 +115,50 @@ export default function MatchesPage() {
 
   const statusIcon = { upcoming: Clock, ongoing: Play, completed: CheckCircle };
 
+  // Export handlers
+  async function handleExportExcel() {
+    try {
+      await exportMatchesToExcel(matches, Object.values(teamMap), 'Tournament');
+    } catch (err) {
+      console.error('Error exporting to Excel:', err);
+      alert('Failed to export to Excel: ' + err.message);
+    }
+  }
+
+  async function handleExportPDF() {
+    try {
+      await exportMatchesToPDF('Tournament');
+    } catch (err) {
+      console.error('Error exporting to PDF:', err);
+      alert('Failed to export to PDF: ' + err.message);
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-[var(--text-1)]">Matches</h1>
-        <p className="text-[var(--text-3)] text-sm mt-0.5">{filtered.length} matches shown</p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-[var(--text-1)]">Matches</h1>
+          <p className="text-[var(--text-3)] text-sm mt-0.5">{filtered.length} matches shown</p>
+        </div>
+        <div className="flex gap-2 items-center flex-wrap">
+          <button
+            onClick={handleExportExcel}
+            className="px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/50 text-sm font-medium transition-all flex items-center gap-2"
+            title="Export matches to Excel"
+          >
+            <FileDown size={16} />
+            Export Excel
+          </button>
+          <button
+            onClick={handleExportPDF}
+            className="px-4 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:border-blue-500/50 text-sm font-medium transition-all flex items-center gap-2"
+            title="Export matches to PDF"
+          >
+            <FileDown size={16} />
+            Export PDF
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -145,6 +198,13 @@ export default function MatchesPage() {
             return (
               <Card key={match.id}>
                 <div className="flex items-center gap-4">
+                  {/* Match Number */}
+                  {match.matchNumber && (
+                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center">
+                      <span className="text-xs font-bold text-[var(--accent)]">M{match.matchNumber}</span>
+                    </div>
+                  )}
+
                   {/* Status icon */}
                   <StatusIcon size={16} className={
                     match.status === 'completed' ? 'text-emerald-400' :
@@ -154,7 +214,7 @@ export default function MatchesPage() {
                   {/* Teams & score */}
                   <div className="flex-1 flex items-center gap-3">
                     <span className="font-medium text-[var(--text-1)] text-sm text-right flex-1">
-                      {match.teamAName ?? '—'}
+                      {match.teamAName ?? teamMap[match.teamAId]?.name ?? '—'}
                     </span>
 
                     {isEditing ? (
@@ -182,14 +242,25 @@ export default function MatchesPage() {
                     )}
 
                     <span className="font-medium text-[var(--text-1)] text-sm flex-1">
-                      {match.teamBName ?? '—'}
+                      {match.teamBName ?? teamMap[match.teamBId]?.name ?? '—'}
                     </span>
                   </div>
 
                   {/* Meta */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {match.poolId && <Badge variant="pool">{match.poolId}</Badge>}
-                    {match.stage  && <Badge variant="knockout">{match.stage}</Badge>}
+                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                    {/* Pool match info */}
+                    {match.poolId && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="pool">{match.poolId}</Badge>
+                        {match.round && <span className="text-xs text-[var(--text-3)]">R{match.round}</span>}
+                      </div>
+                    )}
+                    {/* Knockout match info */}
+                    {match.stage && (
+                      <Badge variant="knockout">
+                        {match.stage === 'QF' ? 'Quarter Final' : match.stage === 'SF' ? 'Semi Final' : match.stage}
+                      </Badge>
+                    )}
                     <Badge variant={match.status}>{match.status}</Badge>
 
                     {/* Edit / save / cancel */}
@@ -224,6 +295,41 @@ export default function MatchesPage() {
           })}
         </div>
       )}
+
+      {/* Hidden section for PDF export */}
+      <div id="matches-export-section" style={{ display: 'none' }} className="p-8 bg-white text-black">
+        <h1 className="text-3xl font-bold mb-6">All Matches Report</h1>
+        <table className="w-full border-collapse border border-gray-300">
+          <thead className="bg-gray-200">
+            <tr>
+              <th className="border border-gray-300 px-3 py-2 text-left">Type</th>
+              <th className="border border-gray-300 px-3 py-2 text-left">Match #</th>
+              <th className="border border-gray-300 px-3 py-2 text-left">Stage/Pool</th>
+              <th className="border border-gray-300 px-3 py-2 text-left">Round</th>
+              <th className="border border-gray-300 px-3 py-2 text-left">Team A</th>
+              <th className="border border-gray-300 px-3 py-2 text-center">Score</th>
+              <th className="border border-gray-300 px-3 py-2 text-left">Team B</th>
+              <th className="border border-gray-300 px-3 py-2 text-left">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matches.map(m => (
+              <tr key={m.id}>
+                <td className="border border-gray-300 px-3 py-2">{m.type === 'pool' ? 'Pool' : 'Knockout'}</td>
+                <td className="border border-gray-300 px-3 py-2 font-bold">M{m.matchNumber || '-'}</td>
+                <td className="border border-gray-300 px-3 py-2">{m.stage || m.poolId || '-'}</td>
+                <td className="border border-gray-300 px-3 py-2">{m.round || '-'}</td>
+                <td className="border border-gray-300 px-3 py-2">{m.teamAName || teamMap[m.teamAId]?.name || '-'}</td>
+                <td className="border border-gray-300 px-3 py-2 text-center font-bold">
+                  {m.scoreA !== null ? m.scoreA : '-'} - {m.scoreB !== null ? m.scoreB : '-'}
+                </td>
+                <td className="border border-gray-300 px-3 py-2">{m.teamBName || teamMap[m.teamBId]?.name || '-'}</td>
+                <td className="border border-gray-300 px-3 py-2 capitalize">{m.status || '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
