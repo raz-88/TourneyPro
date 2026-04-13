@@ -1,6 +1,6 @@
 // src/components/tournament/TournamentDetailPage.jsx
 // ─────────────────────────────────────────────────────────────
-// Shows a single tournament: teams tab + generate fixtures CTA.
+// Shows a single tournament: teams tab with team management.
 // ─────────────────────────────────────────────────────────────
 
 import React, { useEffect, useState } from 'react';
@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import {
   getTournament, getTeams, addTeam, updateTeam, deleteTeam,
-  saveMatches, getMatches, updateTournament,
+  saveMatches, getMatches, updateTournament, upsertLeaderboardEntry,
 } from '../../firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -70,54 +70,146 @@ export default function TournamentDetailPage() {
   // ── Fixture Generation ─────────────────────────────────────
   async function generateFixtures() {
     if (!tournament) return;
-    if (!confirm('Generate fixtures? Existing matches will not be deleted.')) return;
+    if (!confirm('Generate fixtures? This will create all matches for this tournament.')) return;
     setGenLoading(true);
 
     try {
-      const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
       const teamIds = teams.map(t => t.id);
       let newMatches = [];
 
       if (tournament.tournamentType === 'pool') {
-        // Determine pool config
+        // Determine pool config and assign teams to pools
         let config;
-        if (tournament.fixtureMode === 'auto') {
-          config = autoPoolConfig(teamIds.length);
-        } else {
-          const nPools = tournament.numPools || 2;
-          const base   = Math.floor(teamIds.length / nPools);
-          const rem    = teamIds.length % nPools;
-          const sizes  = Array(nPools).fill(base).map((v, i) => i < rem ? v + 1 : v);
-          config = { pools: nPools, teamsPerPool: sizes };
+        const nPools = tournament.numPools || 2;
+        const base = Math.floor(teamIds.length / nPools);
+        const rem = teamIds.length % nPools;
+        const poolSizes = Array(nPools).fill(base).map((v, i) => i < rem ? v + 1 : v);
+        config = { pools: nPools, sizes: poolSizes };
+
+        // Create team=>pool mapping and update database
+        const teamPoolMap = {};
+        let teamIndex = 0;
+        for (let poolIdx = 0; poolIdx < config.pools; poolIdx++) {
+          const poolLetter = String.fromCharCode(65 + poolIdx);
+          const poolSize = config.sizes[poolIdx];
+          
+          for (let j = 0; j < poolSize && teamIndex < teamIds.length; j++) {
+            const teamId = teamIds[teamIndex];
+            teamPoolMap[teamId] = poolLetter;
+            await updateTeam(teamId, { pool: poolLetter });
+            setTeams(ts => ts.map(t => 
+              t.id === teamId ? { ...t, pool: poolLetter } : t
+            ));
+            teamIndex++;
+          }
         }
 
-        // Distribute teams into pools
-        let cursor = 0;
-        for (let p = 0; p < config.pools; p++) {
-          const size     = config.teamsPerPool[p];
-          const poolTeams = teamIds.slice(cursor, cursor + size);
-          cursor += size;
-          const poolId   = `Pool ${String.fromCharCode(65 + p)}`; // Pool A, B, C…
-          const ms       = buildPoolMatches(id, dataUserId, poolId, poolTeams, teamMap);
-          newMatches      = newMatches.concat(ms);
+        // Generate round-robin matches for each pool (separate lists)
+        const allPoolMatches = []; // [{ poolLetter, matches: [...] }, ...]
+        const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
+        
+        for (let poolIdx = 0; poolIdx < config.pools; poolIdx++) {
+          const poolLetter = String.fromCharCode(65 + poolIdx);
+          // Get teams in this pool from our mapping
+          const poolTeamIds = Object.entries(teamPoolMap)
+            .filter(([_, pool]) => pool === poolLetter)
+            .map(([teamId, _]) => teamId);
+          
+          if (poolTeamIds.length < 2) continue;
+          
+          const ms = buildPoolMatches(id, dataUserId, `Pool ${poolLetter}`, poolTeamIds, teamMap);
+          
+          // Add stage and poolId info (but not matchNumber yet)
+          ms.forEach(m => {
+            m.stage = 'pool';
+            m.poolId = `Pool ${poolLetter}`;
+          });
+          
+          allPoolMatches.push({ poolLetter, matches: ms });
         }
+
+        // Interleave matches by round: M1 from Pool A Round 1, M2 from Pool B Round 1, M3 from Pool C Round 1, M4 from Pool A Round 2, etc.
+        let matchNo = 1;
+        
+        if (allPoolMatches.length > 0) {
+          const maxRounds = Math.max(...allPoolMatches.map(p => Math.max(...p.matches.map(m => m.round || 0))));
+          
+          for (let round = 1; round <= maxRounds; round++) {
+            for (const poolData of allPoolMatches) {
+              const roundMatches = poolData.matches.filter(m => m.round === round);
+              roundMatches.forEach(m => {
+                m.matchNumber = matchNo++;
+              });
+              newMatches = newMatches.concat(roundMatches);
+            }
+          }
+        }
+
+        // Generate knockout matches if applicable
+        // NOTE: Knockout matches are only generated after pool matches are completed
+        // and based on actual leaderboard standings, not pre-generated with placeholders
       } else {
-        // Knockout
-        newMatches = buildKnockoutMatches(id, dataUserId, teamIds, {
-          includeQF:    tournament.includeQF,
-          includeSF:    tournament.includeSF,
+        // Knockout from start
+        const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
+        const koMatches = buildKnockoutMatches(id, dataUserId, teamIds, {
+          includeQF: tournament.includeQF,
+          includeSF: tournament.includeSF,
           includeFinal: tournament.includeFinal,
         });
+        
+        // Add match numbers
+        let matchNo = 1;
+        koMatches.forEach(m => {
+          m.matchNumber = matchNo++;
+        });
+        
+        newMatches = koMatches;
       }
 
-      await saveMatches(newMatches);
-      await updateTournament(id, { status: 'active' });
+      if (newMatches.length > 0) {
+        await saveMatches(newMatches);
+      }
 
-      // Reload matches
-      const fresh = await getMatches(id);
-      setMatches(fresh);
-      setTournament(t => ({ ...t, status: 'active' }));
-      setTab('fixtures');
+      // Initialize leaderboard entries for all teams with their pool assignments
+      if (tournament.tournamentType === 'pool') {
+        const poolMatches = newMatches.filter(m => m.type === 'pool');
+        const pools = [...new Set(poolMatches.map(m => m.poolId).filter(Boolean))];
+        
+        for (const pool of pools) {
+          const poolTeamIds = [...new Set(
+            poolMatches
+              .filter(m => m.poolId === pool)
+              .flatMap(m => [m.teamAId, m.teamBId])
+          )];
+
+          // Initialize leaderboard entry for each team in the pool
+          for (const teamId of poolTeamIds) {
+            await upsertLeaderboardEntry(id, teamId, {
+              teamId,
+              poolId: pool,
+              played: 0,
+              won: 0,
+              lost: 0,
+              drawn: 0,
+              gf: 0,
+              ga: 0,
+              gd: 0,
+              points: 0,
+              mainUserId: dataUserId,
+            });
+          }
+        }
+      }
+      
+      await updateTournament(id, { status: 'active', fixturesGenerated: true });
+
+      // Reload
+      const freshMatches = await getMatches(id);
+      setMatches(freshMatches);
+      setTournament(t => ({ ...t, status: 'active', fixturesGenerated: true }));
+    } catch (err) {
+      console.error('Error generating fixtures:', err);
+      alert('Error generating fixtures: ' + err.message);
     } finally {
       setGenLoading(false);
     }
@@ -175,7 +267,6 @@ export default function TournamentDetailPage() {
       <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--border)] rounded-xl p-1 w-fit">
         {[
           { key: 'teams',    icon: Users,    label: 'Teams' },
-          { key: 'fixtures', icon: Calendar, label: 'Fixtures' },
         ].map(({ key, icon: Icon, label }) => (
           <button
             key={key}
@@ -193,51 +284,96 @@ export default function TournamentDetailPage() {
 
       {/* ─ TEAMS TAB ─ */}
       {tab === 'teams' && (
-        <div className="space-y-3">
-          {teams.map((team, idx) => (
-            <Card key={team.id} className="flex items-center gap-4 py-3">
-              <span className="text-sm font-bold text-[var(--text-3)] w-6 text-center flex-shrink-0">
-                {idx + 1}
-              </span>
-              {editingId === team.id ? (
-                <>
-                  <input
-                    className="flex-1 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--accent)] text-[var(--text-1)] text-sm focus:outline-none"
-                    value={editName}
-                    onChange={e => setEditName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleEditTeam(team.id)}
-                    autoFocus
-                  />
-                  <button onClick={() => handleEditTeam(team.id)}
-                    className="p-1.5 rounded text-emerald-400 hover:bg-emerald-400/10 transition-colors">
-                    <Check size={15} />
-                  </button>
-                  <button onClick={() => setEditingId(null)}
-                    className="p-1.5 rounded text-[var(--text-3)] hover:bg-[var(--surface-2)] transition-colors">
-                    <X size={15} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className="flex-1 text-[var(--text-1)] font-medium">{team.name}</span>
-                  {canEdit && (
-                    <>
-                      <button onClick={() => { setEditingId(team.id); setEditName(team.name); }}
-                        className="p-1.5 rounded text-[var(--text-3)] hover:text-[var(--accent)] hover:bg-[var(--surface-2)] transition-colors">
-                        <Edit2 size={14} />
-                      </button>
-                      <button onClick={() => handleDeleteTeam(team.id)}
-                        className="p-1.5 rounded text-[var(--text-3)] hover:text-red-400 hover:bg-red-500/10 transition-colors">
-                        <Trash2 size={14} />
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-            </Card>
-          ))}
+        <div className="space-y-6">
+          {/* Pool Display */}
+          {tournament.tournamentType === 'pool' && tournament.numPools && (
+            <div>
+              <h2 className="text-lg font-semibold text-[var(--text-1)] mb-4">Teams by Pool</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Array.from({ length: tournament.numPools }).map((_, poolIdx) => {
+                  const poolLetter = String.fromCharCode(65 + poolIdx);
+                  const poolTeams = teams.filter(t => t.pool === poolLetter).length > 0 
+                    ? teams.filter(t => t.pool === poolLetter)
+                    : []; // Show empty pools too
+                  
+                  return (
+                    <Card key={poolIdx} className="p-4 space-y-3">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Badge variant="pool">Pool {poolLetter}</Badge>
+                        <span className="text-xs text-[var(--text-3)]">{poolTeams.length} teams</span>
+                      </div>
+                      
+                      {poolTeams.length > 0 ? (
+                        <div className="space-y-2">
+                          {poolTeams.map((team, idx) => (
+                            <div key={team.id} className="flex items-center gap-3 p-2 rounded-lg bg-[var(--surface-1)]">
+                              <span className="text-xs font-medium text-[var(--text-3)] w-4">{idx + 1}.</span>
+                              <span className="flex-1 text-sm text-[var(--text-1)] font-medium">{team.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-[var(--text-3)] italic">No teams assigned yet</p>
+                      )}
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-          {/* Add team */}
+          {/* All Teams List */}
+          {tournament.tournamentType === 'knockout' && (
+            <div>
+              <h2 className="text-lg font-semibold text-[var(--text-1)] mb-4">Teams ({teams.length})</h2>
+              <div className="space-y-3">
+                {teams.map((team, idx) => (
+                  <Card key={team.id} className="flex items-center gap-4 py-3">
+                    <span className="text-sm font-bold text-[var(--text-3)] w-6 text-center flex-shrink-0">
+                      {idx + 1}
+                    </span>
+                    {editingId === team.id ? (
+                      <>
+                        <input
+                          className="flex-1 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--accent)] text-[var(--text-1)] text-sm focus:outline-none"
+                          value={editName}
+                          onChange={e => setEditName(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleEditTeam(team.id)}
+                          autoFocus
+                        />
+                        <button onClick={() => handleEditTeam(team.id)}
+                          className="p-1.5 rounded text-emerald-400 hover:bg-emerald-400/10 transition-colors">
+                          <Check size={15} />
+                        </button>
+                        <button onClick={() => setEditingId(null)}
+                          className="p-1.5 rounded text-[var(--text-3)] hover:bg-[var(--surface-2)] transition-colors">
+                          <X size={15} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 text-[var(--text-1)] font-medium">{team.name}</span>
+                        {canEdit && (
+                          <>
+                            <button onClick={() => { setEditingId(team.id); setEditName(team.name); }}
+                              className="p-1.5 rounded text-[var(--text-3)] hover:text-[var(--accent)] hover:bg-[var(--surface-2)] transition-colors">
+                              <Edit2 size={14} />
+                            </button>
+                            <button onClick={() => handleDeleteTeam(team.id)}
+                              className="p-1.5 rounded text-[var(--text-3)] hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add Team Button */}
           {canEdit && (
             addingTeam ? (
               <div className="flex gap-2">
@@ -263,85 +399,6 @@ export default function TournamentDetailPage() {
           )}
         </div>
       )}
-
-      {/* ─ FIXTURES TAB ─ */}
-      {tab === 'fixtures' && (
-        <div className="space-y-6">
-          {matches.length === 0 ? (
-            <Card className="text-center py-12">
-              <Calendar size={40} className="mx-auto text-[var(--text-3)] mb-3" />
-              <p className="text-[var(--text-2)] font-medium">No fixtures generated yet</p>
-              <p className="text-[var(--text-3)] text-sm mb-4">
-                Add at least 2 teams, then click "Generate Fixtures".
-              </p>
-              {canEdit && teams.length >= 2 && (
-                <Button onClick={generateFixtures} disabled={genLoading}>
-                  <Zap size={16} /> {genLoading ? 'Generating…' : 'Generate Now'}
-                </Button>
-              )}
-            </Card>
-          ) : (
-            <>
-              {/* Pool matches */}
-              {pools.map(pool => (
-                <div key={pool}>
-                  <h3 className="font-display font-semibold text-[var(--text-1)] mb-3 flex items-center gap-2">
-                    <Badge variant="pool">{pool}</Badge>
-                    <span className="text-sm text-[var(--text-3)] font-normal">
-                      {matches.filter(m => m.poolId === pool).length} matches
-                    </span>
-                  </h3>
-                  <div className="space-y-2">
-                    {matches.filter(m => m.poolId === pool).map(m => (
-                      <MatchRow key={m.id} match={m} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {/* Knockout matches */}
-              {['QF', 'SF', 'Final'].map(stage => {
-                const stagematches = matches.filter(m => m.stage === stage);
-                if (!stagematches.length) return null;
-                return (
-                  <div key={stage}>
-                    <h3 className="font-display font-semibold text-[var(--text-1)] mb-3">
-                      <Badge variant="knockout">{stage === 'QF' ? 'Quarter Finals' : stage === 'SF' ? 'Semi Finals' : 'Final'}</Badge>
-                    </h3>
-                    <div className="space-y-2">
-                      {stagematches.map(m => <MatchRow key={m.id} match={m} />)}
-                    </div>
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
-      )}
     </div>
-  );
-}
-
-function MatchRow({ match }) {
-  return (
-    <Card className="flex items-center gap-4 py-3">
-      <div className="flex-1 flex items-center justify-between gap-4">
-        <span className="text-sm font-medium text-[var(--text-1)] text-right flex-1">{match.teamAName}</span>
-        <div className="flex items-center gap-3 flex-shrink-0">
-          {match.status === 'completed' ? (
-            <span className="font-display font-bold text-lg text-[var(--text-1)]">
-              {match.scoreA} – {match.scoreB}
-            </span>
-          ) : (
-            <span className="text-xs font-medium text-[var(--text-3)] px-3 py-1 rounded-full bg-[var(--surface-2)]">VS</span>
-          )}
-        </div>
-        <span className="text-sm font-medium text-[var(--text-1)] flex-1">{match.teamBName}</span>
-      </div>
-      <Badge variant={match.status}>{match.status}</Badge>
-      {match.round && (
-        <span className="text-xs text-[var(--text-3)]">Round {match.round}</span>
-      )}
-    </Card>
   );
 }

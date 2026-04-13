@@ -3,11 +3,12 @@
 // Multi-step form: tournament details → teams → fixture config
 // ─────────────────────────────────────────────────────────────
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, Trophy, Users, Settings2, Plus, X } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Trophy, Users, Settings2, Plus, X, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { createTournament, addTeam } from '../../firebase/firestore';
+import { createTournament, addTeam, saveMatches } from '../../firebase/firestore';
+import { generateRoundRobin, calculateStandings } from '../../utils/fixtureGenerator';
 import { Button, Input, Select, Card } from '../ui';
 
 const SPORTS = ['Football','Cricket','Basketball','Volleyball','Tennis','Badminton','Hockey','Rugby','Baseball','Other'];
@@ -37,10 +38,35 @@ export default function CreateTournamentPage() {
 
   // Step 2 – Manual fixture config (only if fixtureMode === 'manual')
   const [numPools, setNumPools] = useState(2);
+  const [teamsDistMode, setTeamsDistMode] = useState('auto'); // 'auto' | 'manual'
+  const [poolTeamCounts, setPoolTeamCounts] = useState([]);
 
   const setI = (k) => (e) => setInfo(i => ({ ...i, [k]: e.target.value }));
   const setIB = (k) => (e) => setInfo(i => ({ ...i, [k]: e.target.checked }));
   const setIN = (k) => (e) => setInfo(i => ({ ...i, [k]: Number(e.target.value) }));
+
+  // ── Computed values ──────────────────────────────────────
+  const validTeams = teams.filter(t => t.name.trim());
+  const teamsPerPoolAuto = Math.floor(validTeams.length / numPools);
+  
+  // Initialize poolTeamCounts when numPools changes
+  React.useEffect(() => {
+    if (teamsDistMode === 'auto') {
+      const counts = Array.from({ length: numPools }, (_, i) => 
+        i < (validTeams.length % numPools) ? teamsPerPoolAuto + 1 : teamsPerPoolAuto
+      );
+      setPoolTeamCounts(counts);
+    }
+  }, [numPools, teamsDistMode, validTeams.length, teamsPerPoolAuto]);
+
+  // Calculate total matches based on distribution mode
+  const totalMatches = poolTeamCounts.reduce((sum, count) => {
+    return sum + (count * (count - 1)) / 2;
+  }, 0);
+  
+  const matchesPerPool = info.tournamentType === 'pool' 
+    ? (teamsPerPoolAuto * (teamsPerPoolAuto - 1)) / 2 
+    : 0;
 
   // ── Team helpers ──────────────────────────────────────────
   const addTeamRow   = () => setTeams(ts => [...ts, { name: '' }]);
@@ -58,23 +84,55 @@ export default function CreateTournamentPage() {
     setSaving(true);
     setError('');
     try {
-      const validTeams = teams.filter(t => t.name.trim());
       if (validTeams.length < 2) throw new Error('Add at least 2 teams.');
 
+      // Create tournament
       const tid = await createTournament(dataUserId, {
         ...info,
         numTeams: validTeams.length,
-        numPools: info.fixtureMode === 'manual' ? numPools : null,
+        numPools: info.tournamentType === 'pool' ? numPools : null,
+        teamsPerPool: info.tournamentType === 'pool' ? teamsPerPoolAuto : null,
         mainUserId: dataUserId,
         createdBy: user.uid,
+        status: 'pending', // Tournament starts in pending state
       });
 
-      // Save teams
-      await Promise.all(validTeams.map(t => addTeam(tid, dataUserId, { name: t.name.trim() })));
+      // Save teams with pool assignment
+      if (info.tournamentType === 'pool' && info.fixtureMode === 'manual') {
+        // Manual distribution: distribute teams according to poolTeamCounts
+        let teamIndex = 0;
+        const poolNames = Array.from({ length: numPools }, (_, i) => 
+          String.fromCharCode(65 + i)
+        );
+
+        for (let poolIdx = 0; poolIdx < numPools && teamIndex < validTeams.length; poolIdx++) {
+          const teamsInPool = poolTeamCounts[poolIdx] || 0;
+          for (let j = 0; j < teamsInPool && teamIndex < validTeams.length; j++) {
+            const team = validTeams[teamIndex];
+            await addTeam(tid, dataUserId, { 
+              name: team.name.trim(),
+              pool: poolNames[poolIdx],
+            });
+            teamIndex++;
+          }
+        }
+      } else {
+        // Auto distribution or knockout: just add teams without pool assignment
+        for (const team of validTeams) {
+          const name = team.name.trim();
+          if (info.tournamentType === 'pool' && info.fixtureMode === 'auto') {
+            // Will be assigned to pools during fixture generation
+            await addTeam(tid, dataUserId, { name });
+          } else {
+            await addTeam(tid, dataUserId, { name });
+          }
+        }
+      }
 
       navigate(`/tournaments/${tid}`);
     } catch (err) {
       setError(err.message);
+      console.error('Error creating tournament:', err);
     } finally {
       setSaving(false);
     }
@@ -272,20 +330,115 @@ export default function CreateTournamentPage() {
               </div>
             </div>
 
-            {info.fixtureMode === 'manual' && info.tournamentType === 'pool' && (
-              <Input
-                label="Number of Pools"
-                type="number" min="1"
-                max={teams.filter(t => t.name.trim()).length}
-                value={numPools}
-                onChange={e => setNumPools(Number(e.target.value))}
-              />
-            )}
+            {info.tournamentType === 'pool' && (
+              <div className="space-y-4">
+                {info.fixtureMode === 'manual' && (
+                  <div className="space-y-3">
+                    <Input
+                      label="Number of Pools"
+                      type="number" min="1"
+                      max={validTeams.length}
+                      value={numPools}
+                      onChange={e => setNumPools(Math.max(1, Number(e.target.value)))}
+                    />
 
-            {info.fixtureMode === 'auto' && (
-              <div className="text-sm text-[var(--text-3)] bg-[var(--surface-2)] rounded-lg p-3 border border-[var(--border)]">
-                Auto mode will automatically distribute {teams.filter(t => t.name.trim()).length} teams into optimal pools.
-                Fixtures will be generated using round-robin logic (n(n-1)/2 matches per pool).
+                    {/* Distribution Mode Toggle */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-[var(--text-2)] uppercase tracking-wider">Team Distribution</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setTeamsDistMode('auto')}
+                          className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium border transition-all ${
+                            teamsDistMode === 'auto'
+                              ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]'
+                              : 'border-[var(--border)] text-[var(--text-2)] hover:border-[var(--accent)]/40'
+                          }`}
+                        >
+                          Auto-Distribute
+                        </button>
+                        <button
+                          onClick={() => setTeamsDistMode('manual')}
+                          className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium border transition-all ${
+                            teamsDistMode === 'manual'
+                              ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]'
+                              : 'border-[var(--border)] text-[var(--text-2)] hover:border-[var(--accent)]/40'
+                          }`}
+                        >
+                          Teams in Each Pool
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Manual Team Count Inputs */}
+                    {teamsDistMode === 'manual' && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-[var(--text-2)] uppercase tracking-wider">Teams per Pool</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {Array.from({ length: numPools }).map((_, i) => {
+                            const poolLetter = String.fromCharCode(65 + i);
+                            return (
+                              <Input
+                                key={i}
+                                label={`Pool ${poolLetter}`}
+                                type="number"
+                                min="1"
+                                max={validTeams.length}
+                                value={poolTeamCounts[i] || 0}
+                                onChange={e => {
+                                  const newCounts = [...poolTeamCounts];
+                                  newCounts[i] = Math.max(1, Number(e.target.value));
+                                  setPoolTeamCounts(newCounts);
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Pool preview */}
+                <div className="p-4 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] space-y-3">
+                  <p className="text-xs font-medium text-[var(--text-3)] uppercase tracking-wider">Pool Distribution</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {Array.from({ length: numPools }).map((_, i) => {
+                      const poolLetter = String.fromCharCode(65 + i);
+                      const poolTeamCount = poolTeamCounts[i] || 0;
+                      const matchesInPool = poolTeamCount * (poolTeamCount - 1) / 2;
+                      
+                      return (
+                        <div key={i} className="p-3 rounded-lg bg-[var(--surface-1)] border border-[var(--border)]/50">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-semibold text-[var(--accent)]">Pool {poolLetter}</span>
+                            <span className="text-xs px-2 py-1 bg-[var(--accent)]/10 text-[var(--accent)] rounded">
+                              {poolTeamCount}T
+                            </span>
+                          </div>
+                          <p className="text-xs text-[var(--text-3)]">
+                            {matchesInPool} {matchesInPool === 1 ? 'match' : 'matches'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="pt-2 border-t border-[var(--border)]/50 text-xs text-[var(--text-2)]">
+                    <p><strong>Total:</strong> {poolTeamCounts.reduce((a, b) => a + b, 0)} teams</p>
+                    <p className="pt-1"><strong>Total Matches:</strong> {totalMatches}</p>
+                  </div>
+                </div>
+
+                {info.fixtureMode === 'auto' && (
+                  <div className="text-sm text-[var(--text-3)] bg-[var(--surface-2)] rounded-lg p-3 border border-[var(--border)]">
+                    System will automatically distribute teams and generate fixtures using round-robin logic.
+                  </div>
+                )}
+
+                {info.fixtureMode === 'manual' && (
+                  <div className="text-sm text-[var(--text-3)] bg-[var(--surface-2)] rounded-lg p-3 border border-[var(--border)]">
+                    {matchesPerPool * numPools} round-robin matches will be generated across all pools.
+                  </div>
+                )}
               </div>
             )}
 

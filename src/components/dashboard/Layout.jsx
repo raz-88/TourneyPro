@@ -16,8 +16,8 @@ import { logoutUser } from '../../firebase/auth';
 const NAV = [
   { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/tournaments',  icon: Trophy,           label: 'My Tournaments' },
-  { to: '/matches',      icon: Swords,           label: 'Matches' },
   { to: '/fixtures',     icon: Calendar,         label: 'Fixtures' },
+  { to: '/matches',      icon: Swords,           label: 'Matches' },
   { to: '/leaderboard',  icon: BarChart3,        label: 'Leaderboard' },
   { to: '/pool-management', icon: Layers,        label: 'Pool Management' },
   { to: '/sub-users',    icon: Users,            label: 'Sub-Users', adminOnly: true },
@@ -60,14 +60,17 @@ export default function Layout({ children }) {
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-[var(--border)]">
-          <div className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center"
-            style={{ background: 'var(--accent)' }}>
-            <Trophy size={16} className="text-white" />
-          </div>
+          <img src="/logo.png" alt="TourneyPro" className="w-9 h-9 flex-shrink-0 drop-shadow-lg group-hover:scale-110 transition-transform duration-300" />
+          
           {!collapsed && (
-            <span className="font-display font-bold text-[var(--text-1)] text-lg leading-none">
-              TourneyPro
-            </span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-display font-black text-[var(--text-1)] text-lg">
+                TOURNEY
+              </span>
+              <span className="font-display font-bold text-xs text-orange-500 tracking-wider">
+                PRO
+              </span>
+            </div>
           )}
         </div>
 

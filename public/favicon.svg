@@ -1,0 +1,93 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sportGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6b35;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f7931e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="sportGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="sportGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f0f4ff;stop-opacity:1" />
+    </linearGradient>
+    <filter id="sportShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <!-- Background circle with gradient -->
+  <circle cx="100" cy="100" r="98" fill="url(#sportGrad3)" filter="url(#sportShadow)"/>
+  
+  <!-- Outer ring - dynamic energy -->
+  <circle cx="100" cy="100" r="95" fill="none" stroke="url(#sportGrad1)" stroke-width="2" opacity="0.4"/>
+  <circle cx="100" cy="100" r="88" fill="none" stroke="url(#sportGrad2)" stroke-width="1.5" opacity="0.3"/>
+  
+  <!-- Central trophy - dynamic and sporty -->
+  <g transform="translate(100, 75)">
+    <!-- Trophy handles - curved and dynamic -->
+    <path d="M -18 -5 Q -28 -8 -28 5 Q -28 12 -18 12" stroke="url(#sportGrad1)" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#sportShadow)"/>
+    <path d="M 18 -5 Q 28 -8 28 5 Q 28 12 18 12" stroke="url(#sportGrad2)" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#sportShadow)"/>
+    
+    <!-- Trophy cup - bold and prominent -->
+    <path d="M -16 -5 L -14 8 Q -14 12 -6 12 L 6 12 Q 14 12 14 8 L 16 -5 Z" fill="url(#sportGrad1)" stroke="url(#sportGrad1)" stroke-width="2.5" stroke-linejoin="round"/>
+    
+    <!-- Trophy shine/highlight -->
+    <ellipse cx="-8" cy="0" rx="4" ry="6" fill="#ffffff" opacity="0.4"/>
+    
+    <!-- Trophy stem - bold -->
+    <rect x="-3.5" y="12" width="7" height="10" rx="1.5" fill="url(#sportGrad1)" stroke="url(#sportGrad1)" stroke-width="1.5"/>
+    
+    <!-- Trophy base - dynamic -->
+    <ellipse cx="0" cy="24" rx="16" ry="5" fill="url(#sportGrad1)" stroke="url(#sportGrad1)" stroke-width="2"/>
+    <ellipse cx="0" cy="23" rx="16" ry="4" fill="#ffffff" opacity="0.3"/>
+  </g>
+  
+  <!-- Dynamic bracket lines - sports tournament feel -->
+  <g transform="translate(100, 115)">
+    <!-- Left bracket set -->
+    <g stroke="url(#sportGrad2)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M -35 -8 L -25 -8 L -25 0 L -35 0"/>
+      <path d="M -35 10 L -25 10 L -25 2 L -35 2"/>
+      <line x1="-25" y1="0" x2="-15" y2="1"/>
+      <line x1="-25" y1="2" x2="-15" y2="1"/>
+    </g>
+    
+    <!-- Middle finals -->
+    <g stroke="url(#sportGrad1)" stroke-width="2.5" fill="none" stroke-linecap="round">
+      <path d="M -13 -3 L 0 1"/>
+      <path d="M -13 5 L 0 1"/>
+    </g>
+    
+    <!-- Winner circle - bold and energetic -->
+    <circle cx="12" cy="1" r="6" fill="none" stroke="url(#sportGrad1)" stroke-width="3"/>
+    <circle cx="12" cy="1" r="4" fill="url(#sportGrad1)" opacity="0.2"/>
+    
+    <!-- Victory star inside -->
+    <g transform="translate(12, 1)">
+      <polygon points="0,-2.5 0.7,-0.8 2.5,-0.8 1.2,0.5 1.8,2.3 0,1 -1.8,2.3 -1.2,0.5 -2.5,-0.8 -0.7,-0.8" fill="url(#sportGrad1)"/>
+    </g>
+  </g>
+  
+  <!-- Decorative motion lines - speed effect -->
+  <g stroke="url(#sportGrad1)" stroke-width="2" opacity="0.6" stroke-linecap="round">
+    <line x1="30" y1="45" x2="45" y2="45"/>
+    <line x1="25" y1="55" x2="38" y2="55"/>
+    <line x1="160" y1="120" x2="170" y2="120"/>
+    <line x1="165" y1="130" x2="172" y2="130"/>
+  </g>
+  
+  <!-- Top accent stars -->
+  <g fill="url(#sportGrad1)" opacity="0.8">
+    <polygon points="28,20 30,26 36,26 31,31 33,37 28,32 23,37 25,31 20,26 26,26" transform="scale(0.5)"/>
+    <polygon points="155,15 157,21 163,21 158,26 160,32 155,27 150,32 152,26 147,21 153,21" transform="scale(0.5)"/>
+  </g>
+  
+  <!-- Bottom accent elements -->
+  <circle cx="35" cy="170" r="2.5" fill="url(#sportGrad2)" opacity="0.7"/>
+  <circle cx="165" cy="175" r="2.5" fill="url(#sportGrad1)" opacity="0.7"/>
+  
+  <!-- Brand text -->
+  <text x="100" y="195" font-family="Syne, -apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="900" text-anchor="middle" fill="url(#sportGrad1)" letter-spacing="1.5" font-style="italic">TOURNEY</text>
+</svg>
