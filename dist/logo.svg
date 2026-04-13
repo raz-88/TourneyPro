@@ -1,0 +1,72 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+  <defs>
+    <linearGradient id="modernGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0099cc;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="modernGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00ffee;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00d4ff;stop-opacity:1" />
+    </linearGradient>
+    <filter id="modernGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#00d4ff" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+  
+  <!-- Dark background circle -->
+  <circle cx="100" cy="100" r="98" fill="#0a1a2e"/>
+  
+  <!-- Bright circular border -->
+  <circle cx="100" cy="100" r="95" fill="none" stroke="url(#modernGrad1)" stroke-width="3" opacity="0.8"/>
+  <circle cx="100" cy="100" r="88" fill="none" stroke="url(#modernGrad2)" stroke-width="2" opacity="0.5"/>
+  
+  <!-- Modern geometric trophy design - centered -->
+  <g transform="translate(100, 100)" filter="url(#modernGlow)">
+    <!-- Main trophy body - geometric style -->
+    <!-- Top cup part -->
+    <path d="M -18 -25 L -15 -12 Q -15 -8 -10 -8 L 10 -8 Q 15 -8 15 -12 L 18 -25 Z" 
+          fill="none" stroke="url(#modernGrad1)" stroke-width="3.5" stroke-linejoin="round"/>
+    
+    <!-- Left inner cup angle -->
+    <line x1="-12" y1="-22" x2="-8" y2="-10" stroke="url(#modernGrad2)" stroke-width="2.5" stroke-linecap="round"/>
+    
+    <!-- Right inner cup angle -->
+    <line x1="12" y1="-22" x2="8" y2="-10" stroke="url(#modernGrad2)" stroke-width="2.5" stroke-linecap="round"/>
+    
+    <!-- Left handle - geometric -->
+    <path d="M -15 -12 L -22 -8 L -22 8 L -15 10" 
+          fill="none" stroke="url(#modernGrad1)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Right handle - geometric -->
+    <path d="M 15 -12 L 22 -8 L 22 8 L 15 10" 
+          fill="none" stroke="url(#modernGrad1)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Center divider accent -->
+    <line x1="0" y1="-8" x2="0" y2="8" stroke="url(#modernGrad2)" stroke-width="2" opacity="0.7" stroke-linecap="round"/>
+    
+    <!-- Trophy stem - bold geometric -->
+    <path d="M -4 10 L -6 18 L -2 22 L 0 20 L 2 22 L 6 18 L 4 10" 
+          fill="none" stroke="url(#modernGrad1)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+    
+    <!-- Base section 1 -->
+    <line x1="-8" y1="22" x2="-6" y2="28" stroke="url(#modernGrad1)" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="-6" y1="28" x2="2" y2="28" stroke="url(#modernGrad1)" stroke-width="3.5" stroke-linecap="round"/>
+    
+    <!-- Base section 2 -->
+    <line x1="8" y1="22" x2="6" y2="28" stroke="url(#modernGrad1)" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="6" y1="28" x2="-2" y2="28" stroke="url(#modernGrad2)" stroke-width="2.5" stroke-linecap="round"/>
+    
+    <!-- Victory accent line -->
+    <line x1="-2" y1="28" x2="2" y2="32" stroke="url(#modernGrad2)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  </g>
+  
+  <!-- Outer decorative circles -->
+  <circle cx="100" cy="100" r="98" fill="none" stroke="url(#modernGrad2)" stroke-width="1.5" opacity="0.3" stroke-dasharray="3,3"/>
+  
+  <!-- Corner accent dots -->
+  <circle cx="30" cy="30" r="2.5" fill="url(#modernGrad1)" opacity="0.6"/>
+  <circle cx="170" cy="30" r="2.5" fill="url(#modernGrad2)" opacity="0.6"/>
+  <circle cx="30" cy="170" r="2.5" fill="url(#modernGrad2)" opacity="0.6"/>
+  <circle cx="170" cy="170" r="2.5" fill="url(#modernGrad1)" opacity="0.6"/>
+</svg>
