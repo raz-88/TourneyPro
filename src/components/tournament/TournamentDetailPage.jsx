@@ -35,6 +35,7 @@ export default function TournamentDetailPage() {
   const [editingId, setEditingId]   = useState(null);
   const [editName, setEditName]     = useState('');
   const [newTeamName, setNewTeamName] = useState('');
+  const [selectedPoolForTeam, setSelectedPoolForTeam] = useState('A');
   const [addingTeam, setAddingTeam] = useState(false);
 
   useEffect(() => {
@@ -50,9 +51,10 @@ export default function TournamentDetailPage() {
   // ── Team CRUD ──────────────────────────────────────────────
   async function handleAddTeam() {
     if (!newTeamName.trim()) return;
-    const tid = await addTeam(id, dataUserId, { name: newTeamName.trim() });
-    setTeams(ts => [...ts, { id: tid, name: newTeamName.trim() }]);
+    const tid = await addTeam(id, dataUserId, { name: newTeamName.trim(), pool: selectedPoolForTeam });
+    setTeams(ts => [...ts, { id: tid, name: newTeamName.trim(), pool: selectedPoolForTeam }]);
     setNewTeamName('');
+    setSelectedPoolForTeam('A');
     setAddingTeam(false);
   }
 
@@ -78,29 +80,40 @@ export default function TournamentDetailPage() {
       let newMatches = [];
 
       if (tournament.tournamentType === 'pool') {
-        // Determine pool config and assign teams to pools
-        let config;
-        const nPools = tournament.numPools || 2;
-        const base = Math.floor(teamIds.length / nPools);
-        const rem = teamIds.length % nPools;
-        const poolSizes = Array(nPools).fill(base).map((v, i) => i < rem ? v + 1 : v);
-        config = { pools: nPools, sizes: poolSizes };
-
-        // Create team=>pool mapping and update database
+        // Use existing pool assignments instead of recalculating
         const teamPoolMap = {};
-        let teamIndex = 0;
-        for (let poolIdx = 0; poolIdx < config.pools; poolIdx++) {
-          const poolLetter = String.fromCharCode(65 + poolIdx);
-          const poolSize = config.sizes[poolIdx];
-          
-          for (let j = 0; j < poolSize && teamIndex < teamIds.length; j++) {
-            const teamId = teamIds[teamIndex];
-            teamPoolMap[teamId] = poolLetter;
-            await updateTeam(teamId, { pool: poolLetter });
-            setTeams(ts => ts.map(t => 
-              t.id === teamId ? { ...t, pool: poolLetter } : t
-            ));
-            teamIndex++;
+        
+        // First, map teams that already have pool assignments
+        teams.forEach(team => {
+          if (team.pool) {
+            teamPoolMap[team.id] = team.pool;
+          }
+        });
+
+        // Get all pools that have teams
+        const assignedPools = [...new Set(Object.values(teamPoolMap))];
+        
+        // If no pools are assigned, calculate and assign
+        if (assignedPools.length === 0) {
+          const nPools = tournament.numPools || 2;
+          const base = Math.floor(teamIds.length / nPools);
+          const rem = teamIds.length % nPools;
+          const poolSizes = Array(nPools).fill(base).map((v, i) => i < rem ? v + 1 : v);
+
+          let teamIndex = 0;
+          for (let poolIdx = 0; poolIdx < nPools; poolIdx++) {
+            const poolLetter = String.fromCharCode(65 + poolIdx);
+            const poolSize = poolSizes[poolIdx];
+            
+            for (let j = 0; j < poolSize && teamIndex < teamIds.length; j++) {
+              const teamId = teamIds[teamIndex];
+              teamPoolMap[teamId] = poolLetter;
+              await updateTeam(teamId, { pool: poolLetter });
+              setTeams(ts => ts.map(t => 
+                t.id === teamId ? { ...t, pool: poolLetter } : t
+              ));
+              teamIndex++;
+            }
           }
         }
 
@@ -108,8 +121,10 @@ export default function TournamentDetailPage() {
         const allPoolMatches = []; // [{ poolLetter, matches: [...] }, ...]
         const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
         
-        for (let poolIdx = 0; poolIdx < config.pools; poolIdx++) {
-          const poolLetter = String.fromCharCode(65 + poolIdx);
+        // Get unique pool letters from assigned pools
+        const uniquePools = [...new Set(Object.values(teamPoolMap))].sort();
+        
+        for (const poolLetter of uniquePools) {
           // Get teams in this pool from our mapping
           const poolTeamIds = Object.entries(teamPoolMap)
             .filter(([_, pool]) => pool === poolLetter)
@@ -311,6 +326,12 @@ export default function TournamentDetailPage() {
                             <div key={team.id} className="flex items-center gap-3 p-2 rounded-lg bg-[var(--surface-1)]">
                               <span className="text-xs font-medium text-[var(--text-3)] w-4">{idx + 1}.</span>
                               <span className="flex-1 text-sm text-[var(--text-1)] font-medium">{team.name}</span>
+                              {canEdit && (
+                                <button onClick={() => handleDeleteTeam(team.id)}
+                                  className="p-1 rounded text-[var(--text-3)] hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -376,26 +397,53 @@ export default function TournamentDetailPage() {
           )}
 
           {/* Add Team Button */}
-          {canEdit && (
+          {canEdit && tournament.tournamentType === 'pool' && matches.length === 0 && (
             addingTeam ? (
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 px-3 py-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-[var(--accent)] transition-all"
-                  placeholder="Team name"
-                  value={newTeamName}
-                  onChange={e => setNewTeamName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddTeam()}
-                  autoFocus
-                />
-                <Button onClick={handleAddTeam}><Check size={15} /></Button>
-                <Button variant="secondary" onClick={() => setAddingTeam(false)}><X size={15} /></Button>
-              </div>
+              <Card className="p-4 space-y-4">
+                <h3 className="text-sm font-semibold text-[var(--text-1)]">Add Team to Pool</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-[var(--text-2)] uppercase tracking-wider block mb-1">
+                      Team Name
+                    </label>
+                    <input
+                      className="w-full px-3 py-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-[var(--accent)] transition-all"
+                      placeholder="Enter team name"
+                      value={newTeamName}
+                      onChange={e => setNewTeamName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleAddTeam()}
+                      autoFocus
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-xs font-medium text-[var(--text-2)] uppercase tracking-wider block mb-1">
+                      Select Pool
+                    </label>
+                    <select
+                      className="w-full px-3 py-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-[var(--accent)] transition-all"
+                      value={selectedPoolForTeam}
+                      onChange={e => setSelectedPoolForTeam(e.target.value)}
+                    >
+                      {Array.from({ length: tournament.numPools }).map((_, i) => {
+                        const poolLetter = String.fromCharCode(65 + i);
+                        return <option key={poolLetter} value={poolLetter}>Pool {poolLetter}</option>;
+                      })}
+                    </select>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button onClick={handleAddTeam} className="flex-1"><Check size={15} /> Add Team</Button>
+                    <Button variant="secondary" onClick={() => { setAddingTeam(false); setNewTeamName(''); setSelectedPoolForTeam('A'); }} className="flex-1"><X size={15} /> Cancel</Button>
+                  </div>
+                </div>
+              </Card>
             ) : (
               <button
                 onClick={() => setAddingTeam(true)}
                 className="w-full py-3 rounded-xl border-2 border-dashed border-[var(--border)] text-[var(--text-3)] hover:border-[var(--accent)]/50 hover:text-[var(--accent)] transition-all flex items-center justify-center gap-2 text-sm"
               >
-                <Plus size={16} /> Add Team
+                <Plus size={16} /> Add Team to Pool
               </button>
             )
           )}

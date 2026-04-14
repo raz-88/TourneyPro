@@ -186,7 +186,7 @@ export default function CreateTournamentPage() {
                   Tournament Type
                 </label>
                 <div className="flex gap-2">
-                  {['pool', 'knockout'].map(v => (
+                  {['pool'].map(v => (
                     <button
                       key={v}
                       onClick={() => setInfo(i => ({ ...i, tournamentType: v }))}
@@ -196,7 +196,7 @@ export default function CreateTournamentPage() {
                           : 'border-[var(--border)] text-[var(--text-2)] hover:border-[var(--accent)]/40'
                       }`}
                     >
-                      {v === 'pool' ? 'Pool System' : 'Knockout'}
+                      Pool System
                     </button>
                   ))}
                 </div>
@@ -234,25 +234,7 @@ export default function CreateTournamentPage() {
               </div>
             </div>
 
-            {/* Knockout options */}
-            {info.tournamentType === 'knockout' && (
-              <div>
-                <p className="text-xs font-medium text-[var(--text-2)] uppercase tracking-wider mb-2">Knockout Rounds</p>
-                <div className="flex flex-col gap-2">
-                  {[
-                    { key: 'includeQF', label: 'Quarter Finals' },
-                    { key: 'includeSF', label: 'Semi Finals' },
-                    { key: 'includeFinal', label: 'Final' },
-                  ].map(({ key, label }) => (
-                    <label key={key} className="flex items-center gap-3 cursor-pointer">
-                      <input type="checkbox" checked={info[key]} onChange={setIB(key)}
-                        className="w-4 h-4 rounded accent-[var(--accent)]" />
-                      <span className="text-sm text-[var(--text-1)]">{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
+
           </div>
         )}
 
