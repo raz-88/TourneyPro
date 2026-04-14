@@ -128,19 +128,21 @@ export default function TournamentDetailPage() {
           allPoolMatches.push({ poolLetter, matches: ms });
         }
 
-        // Interleave matches by round: M1 from Pool A Round 1, M2 from Pool B Round 1, M3 from Pool C Round 1, M4 from Pool A Round 2, etc.
+        // Interleave matches: 1st match from Pool A, 1st match from Pool B, 1st match from Pool C, 1st match from Pool D, 2nd match from Pool A, etc.
         let matchNo = 1;
         
         if (allPoolMatches.length > 0) {
-          const maxRounds = Math.max(...allPoolMatches.map(p => Math.max(...p.matches.map(m => m.round || 0))));
+          // Find max matches in any pool
+          const maxMatches = Math.max(...allPoolMatches.map(p => p.matches.length));
           
-          for (let round = 1; round <= maxRounds; round++) {
+          // Iterate by match index, then by pool
+          for (let matchIdx = 0; matchIdx < maxMatches; matchIdx++) {
             for (const poolData of allPoolMatches) {
-              const roundMatches = poolData.matches.filter(m => m.round === round);
-              roundMatches.forEach(m => {
-                m.matchNumber = matchNo++;
-              });
-              newMatches = newMatches.concat(roundMatches);
+              if (poolData.matches[matchIdx]) {
+                const match = poolData.matches[matchIdx];
+                match.matchNumber = matchNo++;
+                newMatches.push(match);
+              }
             }
           }
         }

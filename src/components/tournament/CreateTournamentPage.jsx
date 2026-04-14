@@ -11,7 +11,7 @@ import { createTournament, addTeam, saveMatches } from '../../firebase/firestore
 import { generateRoundRobin, calculateStandings } from '../../utils/fixtureGenerator';
 import { Button, Input, Select, Card } from '../ui';
 
-const SPORTS = ['Football','Cricket','Basketball','Volleyball','Tennis','Badminton','Hockey','Rugby','Baseball','Other'];
+const SPORTS = ['Football','Cricket','Basketball','Handball','Volleyball','Tennis','Badminton','Hockey','Rugby','Baseball','Other'];
 const STEPS  = ['Tournament Info', 'Add Teams', 'Fixture Config'];
 
 export default function CreateTournamentPage() {
