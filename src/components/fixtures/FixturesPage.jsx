@@ -8,8 +8,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Filter, ChevronDown, Trash2, Zap, FileDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { getTournaments, getMatches, getTeams, getLeaderboard, saveMatches, deleteMatch } from '../../firebase/firestore';
-import { buildKnockoutMatches } from '../../utils/fixtureGenerator';
+import { getTournaments, getMatches, getTeams, getLeaderboard, saveMatches, deleteMatch, updateTeam } from '../../firebase/firestore';
+import { buildPoolMatches, buildKnockoutMatches } from '../../utils/fixtureGenerator';
 import { exportFixturesToExcel, exportFixturesToPDF } from '../../utils/exportUtils';
 import { Card, Badge, Spinner, EmptyState, Button } from '../ui';
 
@@ -33,6 +33,7 @@ export default function FixturesPage() {
   const [generationMode, setGenerationMode] = useState(null); // auto, manual
   const [selectedTeams, setSelectedTeams] = useState({}); // {match1: [teamA, teamB], ...}
   const [enableThirdFourth, setEnableThirdFourth] = useState(false); // Checkbox for optional T3F4
+  const [genLoading, setGenLoading] = useState(false); // Loading state for fixture generation
 
   useEffect(() => {
     if (!dataUserId) return;
@@ -62,6 +63,125 @@ export default function FixturesPage() {
       setLoading(false);
     });
   }, [selected, dataUserId]);
+
+  // Generate pool fixtures from teams
+  async function generateFixtures() {
+    if (!tournament) return;
+    if (!confirm('Generate fixtures? This will create all matches for this tournament.')) return;
+    setGenLoading(true);
+
+    try {
+      const teamIds = Object.keys(teamMap);
+      let newMatches = [];
+
+      if (tournament.tournamentType === 'pool') {
+        // Use existing pool assignments instead of recalculating
+        const teamPoolMap = {};
+        
+        // First, map teams that already have pool assignments
+        Object.values(teamMap).forEach(team => {
+          if (team.pool) {
+            teamPoolMap[team.id] = team.pool;
+          }
+        });
+
+        // Get all pools that have teams
+        const assignedPools = [...new Set(Object.values(teamPoolMap))];
+        
+        // If no pools are assigned, calculate and assign
+        if (assignedPools.length === 0) {
+          const nPools = tournament.numPools || 2;
+          const base = Math.floor(teamIds.length / nPools);
+          const rem = teamIds.length % nPools;
+          const poolSizes = Array(nPools).fill(base).map((v, i) => i < rem ? v + 1 : v);
+
+          let teamIndex = 0;
+          for (let poolIdx = 0; poolIdx < nPools; poolIdx++) {
+            const poolLetter = String.fromCharCode(65 + poolIdx);
+            const poolSize = poolSizes[poolIdx];
+            
+            for (let j = 0; j < poolSize && teamIndex < teamIds.length; j++) {
+              const teamId = teamIds[teamIndex];
+              teamPoolMap[teamId] = poolLetter;
+              await updateTeam(teamId, { pool: poolLetter });
+              teamIndex++;
+            }
+          }
+        }
+
+        // Generate round-robin matches for each pool
+        const allPoolMatches = [];
+        
+        // Get unique pool letters from assigned pools
+        const uniquePools = [...new Set(Object.values(teamPoolMap))].sort();
+        
+        for (const poolLetter of uniquePools) {
+          // Get teams in this pool from our mapping
+          const poolTeamIds = Object.entries(teamPoolMap)
+            .filter(([_, pool]) => pool === poolLetter)
+            .map(([teamId, _]) => teamId);
+          
+          if (poolTeamIds.length < 2) continue;
+          
+          const ms = buildPoolMatches(selected, dataUserId, `Pool ${poolLetter}`, poolTeamIds, teamMap);
+          
+          // Add stage and poolId info
+          ms.forEach(m => {
+            m.stage = 'pool';
+            m.poolId = `Pool ${poolLetter}`;
+          });
+          
+          allPoolMatches.push({ poolLetter, matches: ms });
+        }
+
+        // Interleave matches: 1st match from Pool A, 1st match from Pool B, etc.
+        let matchNo = 1;
+        
+        if (allPoolMatches.length > 0) {
+          const maxMatches = Math.max(...allPoolMatches.map(p => p.matches.length));
+          
+          // Iterate by match index, then by pool
+          for (let matchIdx = 0; matchIdx < maxMatches; matchIdx++) {
+            for (const poolData of allPoolMatches) {
+              if (poolData.matches[matchIdx]) {
+                const match = poolData.matches[matchIdx];
+                match.matchNumber = matchNo++;
+                newMatches.push(match);
+              }
+            }
+          }
+        }
+      } else {
+        // Knockout from start
+        const koMatches = buildKnockoutMatches(selected, dataUserId, teamIds, {
+          includeQF: tournament.includeQF,
+          includeSF: tournament.includeSF,
+          includeFinal: tournament.includeFinal,
+        });
+        
+        let matchNo = 1;
+        koMatches.forEach(m => {
+          m.matchNumber = matchNo++;
+        });
+        
+        newMatches = koMatches;
+      }
+
+      if (newMatches.length > 0) {
+        await saveMatches(newMatches);
+      }
+
+      // Refresh matches
+      const freshMatches = await getMatches(selected);
+      setMatches(freshMatches);
+      setGenLoading(false);
+      alert('Fixtures generated successfully!');
+    } catch (err) {
+      console.error('Error generating fixtures:', err);
+      alert('Failed to generate fixtures: ' + err.message);
+      setGenLoading(false);
+    }
+  }
 
   // Auto-generate knockout matches based on leaderboard standings (only if they don't exist yet)
   // REMOVED - Now using individual buttons for QF, SF, Final generation
@@ -598,8 +718,8 @@ export default function FixturesPage() {
             <p className="text-[var(--text-3)] text-sm">Generate fixtures from a tournament to view them here.</p>
           </div>
           {selected && (
-            <Button onClick={() => navigate(`/tournament/${selected}`)}>
-              <Zap size={16} /> Generate Fixtures
+            <Button onClick={() => generateFixtures()} disabled={genLoading}>
+              <Zap size={16} /> {genLoading ? 'Generating...' : 'Generate Fixtures'}
             </Button>
           )}
         </Card>
