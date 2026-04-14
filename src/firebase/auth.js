@@ -10,6 +10,7 @@ import {
   signOut,
   onAuthStateChanged,
   updateProfile,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import {
   doc,
@@ -55,6 +56,11 @@ export async function logoutUser() {
 export async function getUserProfile(uid) {
   const snap = await getDoc(doc(db, 'users', uid));
   return snap.exists() ? snap.data() : null;
+}
+
+// ── Password Reset ───────────────────────────────────────────
+export async function resetPassword(email) {
+  await sendPasswordResetEmail(auth, email);
 }
 
 // ── Auth state observer (used in AuthContext) ─────────────────

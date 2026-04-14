@@ -5,15 +5,16 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Mail, Lock, User, ArrowRight, Zap } from 'lucide-react';
-import { registerMainUser, loginUser } from '../../firebase/auth';
+import { Trophy, Mail, Lock, User, ArrowRight, Zap, ArrowLeft } from 'lucide-react';
+import { registerMainUser, loginUser, resetPassword } from '../../firebase/auth';
 import { Button, Input } from '../ui';
 
 export default function AuthPage() {
-  const [mode, setMode]     = useState('login'); // 'login' | 'register'
+  const [mode, setMode]     = useState('login'); // 'login' | 'register' | 'forgot'
   const [form, setForm]     = useState({ name: '', email: '', password: '' });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -21,19 +22,32 @@ export default function AuthPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
     try {
       if (mode === 'register') {
         await registerMainUser(form);
-      } else {
+        navigate('/dashboard');
+      } else if (mode === 'login') {
         await loginUser(form.email, form.password);
+        navigate('/dashboard');
+      } else if (mode === 'forgot') {
+        await resetPassword(form.email);
+        setSuccess('Password reset email sent! Check your inbox, and also check your spam folder if you don\'t see it.');
+        setForm({ name: '', email: '', password: '' });
       }
-      navigate('/dashboard');
     } catch (err) {
       setError(friendlyError(err.code));
     } finally {
       setLoading(false);
     }
+  }
+
+  function goBack() {
+    setMode('login');
+    setForm({ name: '', email: '', password: '' });
+    setError('');
+    setSuccess('');
   }
 
   return (
@@ -87,12 +101,14 @@ export default function AuthPage() {
           </div>
 
           <h2 className="font-display text-3xl font-bold text-[var(--text-1)] mb-2">
-            {mode === 'login' ? 'Welcome back' : 'Create account'}
+            {mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Create account' : 'Reset password'}
           </h2>
           <p className="text-[var(--text-3)] text-sm mb-8">
             {mode === 'login'
               ? 'Sign in to manage your tournaments'
-              : 'Set up your admin account to get started'}
+              : mode === 'register'
+              ? 'Set up your admin account to get started'
+              : 'Enter your email to receive a password reset link'}
           </p>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -110,34 +126,58 @@ export default function AuthPage() {
               </div>
             )}
 
-            <div className="relative">
-              <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-3)]" />
-              <input
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder-[var(--text-3)] focus:outline-none focus:border-[var(--accent)] transition-all"
-                type="email"
-                placeholder="Email address"
-                value={form.email}
-                onChange={set('email')}
-                required
-              />
-            </div>
+            {mode !== 'forgot' && (
+              <div className="relative">
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-3)]" />
+                <input
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder-[var(--text-3)] focus:outline-none focus:border-[var(--accent)] transition-all"
+                  type="email"
+                  placeholder="Email address"
+                  value={form.email}
+                  onChange={set('email')}
+                  required
+                />
+              </div>
+            )}
 
-            <div className="relative">
-              <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-3)]" />
-              <input
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder-[var(--text-3)] focus:outline-none focus:border-[var(--accent)] transition-all"
-                type="password"
-                placeholder="Password"
-                value={form.password}
-                onChange={set('password')}
-                required
-                minLength={6}
-              />
-            </div>
+            {mode === 'forgot' && (
+              <div className="relative">
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-3)]" />
+                <input
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder-[var(--text-3)] focus:outline-none focus:border-[var(--accent)] transition-all"
+                  type="email"
+                  placeholder="Email address"
+                  value={form.email}
+                  onChange={set('email')}
+                  required
+                />
+              </div>
+            )}
+
+            {mode !== 'forgot' && (
+              <div className="relative">
+                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-3)]" />
+                <input
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder-[var(--text-3)] focus:outline-none focus:border-[var(--accent)] transition-all"
+                  type="password"
+                  placeholder="Password"
+                  value={form.password}
+                  onChange={set('password')}
+                  required
+                  minLength={6}
+                />
+              </div>
+            )}
 
             {error && (
               <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                 {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
+                {success}
               </div>
             )}
 
@@ -147,20 +187,43 @@ export default function AuthPage() {
               className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-semibold text-white transition-all disabled:opacity-50"
               style={{ background: 'var(--accent)' }}
             >
-              {loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}
+              {loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : mode === 'register' ? 'Create Account' : 'Send Reset Link'}
               {!loading && <ArrowRight size={16} />}
             </button>
           </form>
 
-          <p className="text-center text-sm text-[var(--text-3)] mt-6">
-            {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
+          {mode === 'forgot' && (
             <button
-              onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); }}
-              className="text-[var(--accent)] font-medium hover:underline"
+              onClick={goBack}
+              className="w-full flex items-center justify-center gap-2 mt-4 py-2.5 rounded-lg font-medium text-[var(--accent)] hover:bg-[var(--surface-2)] transition-all"
             >
-              {mode === 'login' ? 'Sign up free' : 'Sign in'}
+              <ArrowLeft size={16} />
+              Back to Sign In
             </button>
-          </p>
+          )}
+
+          {mode !== 'forgot' && (
+            <p className="text-center text-sm text-[var(--text-3)] mt-6">
+              {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
+              <button
+                onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); setSuccess(''); }}
+                className="text-[var(--accent)] font-medium hover:underline"
+              >
+                {mode === 'login' ? 'Sign up free' : 'Sign in'}
+              </button>
+            </p>
+          )}
+
+          {mode === 'login' && (
+            <p className="text-center text-sm text-[var(--text-3)] mt-3">
+              <button
+                onClick={() => { setMode('forgot'); setError(''); setSuccess(''); }}
+                className="text-[var(--accent)] font-medium hover:underline"
+              >
+                Forgot your password?
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -175,6 +238,7 @@ function friendlyError(code) {
     'auth/user-not-found': 'No account found with this email.',
     'auth/wrong-password': 'Incorrect password.',
     'auth/invalid-credential': 'Invalid email or password.',
+    'auth/too-many-requests': 'Too many attempts. Please try again later.',
   };
   return map[code] ?? 'An error occurred. Please try again.';
 }
