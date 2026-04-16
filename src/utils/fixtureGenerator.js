@@ -133,20 +133,35 @@ export function buildKnockoutMatches(tournamentId, mainUserId, teamIds, options 
 
   let teams = [...teamIds];
 
-  // Quarter Finals
+  // Quarter Finals - Custom Championship Pairing
+  // Expected order: [A_Winner, A_Runner, B_Winner, B_Runner, C_Winner, C_Runner, D_Winner, D_Runner]
+  // Pairings:
+  // QF1: A_Winner vs B_Runner
+  // QF2: D_Winner vs C_Runner
+  // QF3: C_Winner vs D_Runner
+  // QF4: B_Winner vs A_Runner
   if (includeQF && teams.length >= 8) {
-    for (let i = 0; i < 4; i++) {
-      matches.push(makeKnockoutMatch(tournamentId, mainUserId, 'QF', i + 1, teams[i], teams[7 - i]));
-    }
+    // teams[0] = A Winner, teams[1] = A Runner
+    // teams[2] = B Winner, teams[3] = B Runner
+    // teams[4] = C Winner, teams[5] = C Runner
+    // teams[6] = D Winner, teams[7] = D Runner
+    
+    matches.push(makeKnockoutMatch(tournamentId, mainUserId, 'QF', 1, teams[0], teams[3])); // A_W vs B_R
+    matches.push(makeKnockoutMatch(tournamentId, mainUserId, 'QF', 2, teams[6], teams[5])); // D_W vs C_R
+    matches.push(makeKnockoutMatch(tournamentId, mainUserId, 'QF', 3, teams[4], teams[7])); // C_W vs D_R
+    matches.push(makeKnockoutMatch(tournamentId, mainUserId, 'QF', 4, teams[2], teams[1])); // B_W vs A_R
+    
     teams = Array(4).fill(null).map((_, i) => `QF_W${i + 1}`); // placeholder winner refs
   }
 
-  // Semi Finals
+  // Semi Finals - Custom Pairing
+  // SF1: Winner of QF1 vs Winner of QF2
+  // SF2: Winner of QF3 vs Winner of QF4
   if (includeSF) {
-    const sf1TeamA = teams[0] ?? null;
-    const sf1TeamB = teams[3] ?? null;
-    const sf2TeamA = teams[1] ?? null;
-    const sf2TeamB = teams[2] ?? null;
+    const sf1TeamA = teams[0] ?? null; // QF1 Winner
+    const sf1TeamB = teams[1] ?? null; // QF2 Winner
+    const sf2TeamA = teams[2] ?? null; // QF3 Winner
+    const sf2TeamB = teams[3] ?? null; // QF4 Winner
     matches.push(makeKnockoutMatch(tournamentId, mainUserId, 'SF', 1, sf1TeamA, sf1TeamB));
     matches.push(makeKnockoutMatch(tournamentId, mainUserId, 'SF', 2, sf2TeamA, sf2TeamB));
     teams = ['SF_W1', 'SF_W2'];
