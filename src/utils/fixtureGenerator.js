@@ -48,33 +48,38 @@ export function autoPoolConfig(teamCount) {
  * @returns {Array<Array<[string, string]>>}
  */
 export function generateRoundRobin(teamIds) {
-  const teams = [...teamIds];
-  const n     = teams.length;
+  let teams = [...teamIds];
 
-  // If odd number, add a BYE placeholder
-  if (n % 2 !== 0) teams.push('BYE');
-
-  const total  = teams.length;
-  const rounds = [];
-  const pivot  = teams[0]; // fixed team at top-left
-  const rest   = teams.slice(1);
-
-  for (let round = 0; round < total - 1; round++) {
-    const roundPairs = [];
-    const rotated    = [rest[(round) % rest.length], ...rest.slice(0, round).reverse(), ...rest.slice(round + 1)];
-
-    // pair pivot with first of rotated
-    const pair0 = [pivot, rotated[0]];
-    if (!pair0.includes('BYE')) roundPairs.push(pair0);
-
-    // pair remaining
-    for (let i = 1; i < total / 2; i++) {
-      const a = rotated[i];
-      const b = rotated[total - 1 - i];
-      if (a !== 'BYE' && b !== 'BYE') roundPairs.push([a, b]);
-    }
-    if (roundPairs.length) rounds.push(roundPairs);
+  // Add BYE if odd
+  if (teams.length % 2 !== 0) {
+    teams.push('BYE');
   }
+
+  const n = teams.length;
+  const rounds = [];
+
+  for (let round = 0; round < n - 1; round++) {
+    const roundPairs = [];
+
+    for (let i = 0; i < n / 2; i++) {
+      const teamA = teams[i];
+      const teamB = teams[n - 1 - i];
+
+      if (teamA !== 'BYE' && teamB !== 'BYE') {
+        roundPairs.push([teamA, teamB]);
+      }
+    }
+
+    rounds.push(roundPairs);
+
+    // 🔁 Proper rotation (keep first fixed)
+    teams = [
+      teams[0],
+      teams[n - 1],
+      ...teams.slice(1, n - 1)
+    ];
+  }
+
   return rounds;
 }
 
